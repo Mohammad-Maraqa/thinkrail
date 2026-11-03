@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      JAVA_CAPTURE_PHASE: before
+      JAVA_CAPTURE_PHASE: after
       TURBO_CONCURRENCY: "1"
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
@@ -74,6 +74,8 @@ jobs:
         shell: bash
         run: |
           set -e
+          rm e2e/java-capture.spec.ts
+          bun test apps/web/src/chat/Markdown.test.tsx
           bun run check:deps
           bun run check:boundaries
           bun run check:seams
@@ -81,7 +83,6 @@ jobs:
           bun run check:compiler
           bun run lint
           .github/scripts/prepare-electrobun.sh
-          bun run typecheck -- --concurrency=1
-          bun run test -- --concurrency=1
-          rm e2e/java-capture.spec.ts
+          bun run typecheck --concurrency=1
+          bun run test --concurrency=1
           THINKRAIL_E2E_SKIP_BUILD=1 bun run e2e -- --serial
