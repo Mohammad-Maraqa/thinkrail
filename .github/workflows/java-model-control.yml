@@ -1,0 +1,59 @@
+name: Java model-picker baseline control
+on:
+  push:
+    branches: [validation/java-model-picker-control]
+permissions:
+  contents: read
+jobs:
+  compare:
+    if: github.repository == 'Mohammad-Maraqa/thinkrail' && github.event.repository.fork && !github.event.repository.private
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: c10f8808cee693e4abffeeb1844a132ed0a91cc5
+          path: baseline
+          persist-credentials: false
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: f586dcefd0e5574900cee01fd4e56468faecf20a
+          path: patched
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.4
+          no-cache: true
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+      - name: Install browser
+        working-directory: baseline
+        run: bun install --frozen-lockfile --ignore-scripts --network-concurrency 4 && bunx playwright install --with-deps chromium
+      - name: Pinned base source manifest
+        working-directory: baseline
+        run: git rev-parse HEAD && sha256sum apps/web/src/lib/highlighter.ts
+      - name: Pinned base exact model-picker control
+        id: baseline
+        continue-on-error: true
+        working-directory: baseline
+        run: bun run e2e -- --serial e2e/model-picker.spec.ts -g 'the composer pill stars'
+      - name: Install patched dependencies
+        working-directory: patched
+        run: bun install --frozen-lockfile --ignore-scripts --network-concurrency 4
+      - name: Patched source manifest
+        working-directory: patched
+        run: git rev-parse HEAD && sha256sum apps/web/src/lib/highlighter.ts apps/web/src/lib/highlighter.test.ts apps/web/src/lib/highlightCode.test.ts apps/web/src/lib/SPEC.md
+      - name: Patched exact model-picker control
+        id: patched
+        continue-on-error: true
+        working-directory: patched
+        run: bun run e2e -- --serial e2e/model-picker.spec.ts -g 'the composer pill stars'
+      - name: Record control outcomes without claiming full-suite success
+        env:
+          BASE_RESULT: ${{ steps.baseline.outcome }}
+          PATCH_RESULT: ${{ steps.patched.outcome }}
+        run: |
+          echo "PINNED_BASE_MODEL_CONTROL=$BASE_RESULT"
+          echo "PATCHED_MODEL_CONTROL=$PATCH_RESULT"
+          test "$BASE_RESULT" = "$PATCH_RESULT"
