@@ -103,6 +103,20 @@ test("unknown languages and mermaid never spawn the worker", async () => {
 	expect(counts().spawned).toBe(0);
 });
 
+test("Java aliases reach the worker and share the cached result", async () => {
+	const { client, posted, answer, counts } = fakeWorker();
+	const code = 'public class Greeting { String message = "hello"; }';
+	const pending = client.highlightCode(code, " Java ", "java-fence");
+	expect(posted).toHaveLength(1);
+	expect(posted[0]).toMatchObject({ code, lang: "java" });
+	answer(0);
+	expect(await pending).toBe(render(code, "java"));
+	expect(client.cachedHighlight(code, "JAVA")).toBe(render(code, "java"));
+	expect(await client.highlightCode(code, "java", "java-fence")).toBe(render(code, "java"));
+	expect(posted).toHaveLength(1);
+	expect(counts().spawned).toBe(1);
+});
+
 test("a throwing worker constructor falls back to in-thread highlighting for good", async () => {
 	const { client, threaded, counts } = fakeWorker({ throws: true });
 	expect(await client.highlightCode("a", "ts", "k")).toBe(render("a", "typescript"));
