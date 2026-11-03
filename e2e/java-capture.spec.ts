@@ -32,7 +32,7 @@ test("Java chat highlighting review evidence", async ({ page }) => {
 	await enterDefaultWorkspace(page);
 	await openPersistedChat(page, "Java syntax highlighting");
 	const message = page.locator('[data-testid="chat-message"][data-role="assistant"]');
-	const block = message.locator("pre");
+	const block = message.locator("pre").last();
 	await expect(block).toContainText(code);
 	if (process.env.JAVA_CAPTURE_PHASE === "before") {
 		await expect(block.locator("span")).toHaveCount(0);
