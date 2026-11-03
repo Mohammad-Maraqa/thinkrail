@@ -1,0 +1,50 @@
+name: Java WASM worker proof
+on:
+  push:
+    branches: [validation/java-chat-wasm-proof]
+permissions:
+  contents: read
+concurrency:
+  group: java-wasm-worker-proof
+  cancel-in-progress: true
+jobs:
+  prove:
+    if: github.repository == 'Mohammad-Maraqa/thinkrail' && github.event.repository.fork && !github.event.repository.private
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      JAVA_CAPTURE_PHASE: after
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version-file: package.json
+          no-cache: true
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+      - name: Prove frozen product source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin f586dcefd0e5574900cee01fd4e56468faecf20a
+          git rev-parse HEAD
+          git diff --exit-code f586dcefd0e5574900cee01fd4e56468faecf20a -- apps/web/src/lib/highlighter.ts apps/web/src/lib/highlighter.test.ts apps/web/src/lib/highlightCode.test.ts apps/web/src/lib/SPEC.md
+          sha256sum apps/web/src/lib/highlighter.ts apps/web/src/lib/highlighter.test.ts apps/web/src/lib/highlightCode.test.ts apps/web/src/lib/SPEC.md
+      - run: bun install --frozen-lockfile --ignore-scripts --network-concurrency 4
+      - run: bunx playwright install --with-deps chromium
+      - name: Prove production worker Java response and capture
+        run: bun run e2e -- --serial e2e/java-capture.spec.ts
+      - name: Emit screenshot in logs
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          image=.thinkrail/context/pr-shots/java-after.png
+          test -f "$image"
+          sha256sum "$image"
+          echo JAVA_SCREENSHOT_BASE64_START
+          base64 -w 76 "$image"
+          echo JAVA_SCREENSHOT_BASE64_END
