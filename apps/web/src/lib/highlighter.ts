@@ -131,6 +131,7 @@ export const SHIKI_FILE_LANGUAGES: readonly ShikiFileLanguage[] = [
 		id: "java",
 		extensions: [".java"],
 		aliases: ["Java"],
+		chat: true,
 		load: () => import("@shikijs/langs/java"),
 	},
 	{
