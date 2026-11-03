@@ -4,6 +4,9 @@ on:
     branches: [validation/java-chat-highlighting]
 permissions:
   contents: read
+concurrency:
+  group: java-highlighting-validation
+  cancel-in-progress: true
 jobs:
   validate:
     if: github.repository == 'Mohammad-Maraqa/thinkrail' && github.event.repository.fork && !github.event.repository.private
@@ -27,6 +30,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git fetch --no-tags --depth=1 origin c10f8808cee693e4abffeeb1844a132ed0a91cc5
           git rev-parse HEAD
           git diff c10f8808cee693e4abffeeb1844a132ed0a91cc5 --stat
           sha256sum apps/web/src/lib/highlighter.ts apps/web/src/lib/highlighter.test.ts apps/web/src/lib/highlightCode.test.ts e2e/java-capture.spec.ts
