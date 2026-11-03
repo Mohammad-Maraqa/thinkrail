@@ -1,0 +1,82 @@
+name: Java highlighting validation
+on:
+  push:
+    branches: [validation/java-chat-highlighting]
+permissions:
+  contents: read
+jobs:
+  validate:
+    if: github.repository == 'Mohammad-Maraqa/thinkrail' && github.event.repository.fork && !github.event.repository.private
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      JAVA_CAPTURE_PHASE: before
+      TURBO_CONCURRENCY: "1"
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version-file: package.json
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+      - run: bun install --frozen-lockfile --ignore-scripts --network-concurrency 4
+      - name: Source evidence manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD
+          git diff c10f8808cee693e4abffeeb1844a132ed0a91cc5 --stat
+          sha256sum apps/web/src/lib/highlighter.ts apps/web/src/lib/highlighter.test.ts apps/web/src/lib/highlightCode.test.ts e2e/java-capture.spec.ts
+          if [ "$JAVA_CAPTURE_PHASE" = before ]; then
+            git diff --exit-code c10f8808cee693e4abffeeb1844a132ed0a91cc5 -- apps/web/src/lib/highlighter.ts
+          fi
+      - name: Focused baseline or regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          bun test apps/web/src/lib/highlighter.test.ts apps/web/src/lib/highlightCode.test.ts > /tmp/java-focused.log 2>&1
+          result=$?
+          set -e
+          cat /tmp/java-focused.log
+          if [ "$JAVA_CAPTURE_PHASE" = before ]; then
+            test "$result" -ne 0
+            grep -q 'Java is recognized for chat fences' /tmp/java-focused.log
+            grep -q 'a Java chat fence renders' /tmp/java-focused.log
+            grep -q 'Java aliases reach the worker' /tmp/java-focused.log
+          else
+            exit "$result"
+          fi
+      - run: bunx playwright install --with-deps chromium
+      - name: Capture same disposable chat and viewport
+        run: bun run e2e -- --serial e2e/java-capture.spec.ts
+      - name: Emit review screenshot in logs
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          image=".thinkrail/context/pr-shots/java-$JAVA_CAPTURE_PHASE.png"
+          test -f "$image"
+          sha256sum "$image"
+          echo "JAVA_SCREENSHOT_BASE64_START"
+          base64 -w 76 "$image"
+          echo "JAVA_SCREENSHOT_BASE64_END"
+      - name: Required final gates
+        if: env.JAVA_CAPTURE_PHASE == 'after'
+        shell: bash
+        run: |
+          set -e
+          bun run check:deps
+          bun run check:boundaries
+          bun run check:seams
+          bun run check:spec-surface
+          bun run check:compiler
+          bun run lint
+          .github/scripts/prepare-electrobun.sh
+          bun run typecheck -- --concurrency=1
+          bun run test -- --concurrency=1
+          rm e2e/java-capture.spec.ts
+          THINKRAIL_E2E_SKIP_BUILD=1 bun run e2e -- --serial
